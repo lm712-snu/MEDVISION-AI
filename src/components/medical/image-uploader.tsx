@@ -1,9 +1,7 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import { Upload, X, FileImage, Loader2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Upload, FileImage, Loader2, ImagePlus } from 'lucide-react';
 import Image from 'next/image';
 
 interface ImageUploaderProps {
@@ -25,12 +23,10 @@ export function ImageUploader({ caseId, images, onUploadComplete }: ImageUploade
         Array.from(files).forEach((file) => {
           formData.append('files', file);
         });
-
         const res = await fetch(`/api/cases/${caseId}/images`, {
           method: 'POST',
           body: formData,
         });
-
         if (!res.ok) throw new Error('Upload failed');
         onUploadComplete();
       } catch (err) {
@@ -53,9 +49,7 @@ export function ImageUploader({ caseId, images, onUploadComplete }: ImageUploade
 
   const handleFileInput = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (e.target.files) {
-        uploadFiles(e.target.files);
-      }
+      if (e.target.files) uploadFiles(e.target.files);
     },
     [uploadFiles]
   );
@@ -67,17 +61,14 @@ export function ImageUploader({ caseId, images, onUploadComplete }: ImageUploade
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <div
-        className={`relative border-2 border-dashed rounded-xl p-8 text-center transition-colors cursor-pointer ${
+        className={`upload-zone relative border-2 border-dashed rounded-2xl p-10 text-center transition-all duration-300 cursor-pointer ${
           dragOver
-            ? 'border-primary bg-primary/5'
-            : 'border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/50'
+            ? 'drag-over border-primary/60 bg-primary/5'
+            : 'border-border/60 hover:border-primary/40 hover:bg-primary/[0.02]'
         }`}
-        onDragOver={(e) => {
-          e.preventDefault();
-          setDragOver(true);
-        }}
+        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
         onDrop={handleDrop}
         onClick={() => document.getElementById('file-input')?.click()}
@@ -91,19 +82,31 @@ export function ImageUploader({ caseId, images, onUploadComplete }: ImageUploade
           onChange={handleFileInput}
         />
         {isUploading ? (
-          <div className="flex flex-col items-center gap-2">
-            <Loader2 className="h-8 w-8 text-primary animate-spin" />
+          <div className="flex flex-col items-center gap-3">
+            <div className="h-14 w-14 rounded-2xl bg-primary/10 flex items-center justify-center">
+              <Loader2 className="h-7 w-7 text-primary animate-spin" />
+            </div>
             <p className="text-sm text-muted-foreground">Uploading...</p>
           </div>
         ) : (
-          <div className="flex flex-col items-center gap-2">
-            <Upload className="h-8 w-8 text-muted-foreground" />
-            <p className="text-sm font-medium">
-              Drag & drop MRI scan images here, or click to browse
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Supports PNG, JPEG, WebP. Upload multiple slices or views.
-            </p>
+          <div className="flex flex-col items-center gap-3">
+            <div className={`h-14 w-14 rounded-2xl flex items-center justify-center transition-all duration-300 ${
+              dragOver ? 'bg-primary/20 glow-subtle' : 'bg-muted/40'
+            }`}
+            >
+              <ImagePlus className={`h-7 w-7 transition-colors duration-300 ${
+                dragOver ? 'text-primary' : 'text-muted-foreground'
+              }`} />
+            </div>
+            <div>
+              <p className="text-sm font-semibold">
+                Drop MRI scans here, or{' '}
+                <span className="text-primary">browse</span>
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                PNG, JPEG, WebP — multiple files supported
+              </p>
+            </div>
           </div>
         )}
       </div>
@@ -111,28 +114,29 @@ export function ImageUploader({ caseId, images, onUploadComplete }: ImageUploade
       {images.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
           {images.map((img) => (
-            <Card key={img.id} className="overflow-hidden group">
-              <CardContent className="p-0 relative">
-                <div className="aspect-square relative bg-muted">
-                  <Image
-                    src={`/uploads/${img.fileKey}`}
-                    alt={img.fileName}
-                    fill
-                    className="object-cover"
-                    sizes="(max-width: 768px) 50vw, 25vw"
-                  />
+            <div
+              key={img.id}
+              className="group relative rounded-xl overflow-hidden border border-border/50 hover:border-primary/30 transition-all duration-300 hover:glow-subtle"
+            >
+              <div className="aspect-square relative bg-muted/30">
+                <Image
+                  src={`/uploads/${img.fileKey}`}
+                  alt={img.fileName}
+                  fill
+                  className="object-cover transition-transform duration-300 group-hover:scale-105"
+                  sizes="(max-width: 768px) 50vw, 25vw"
+                />
+              </div>
+              <div className="p-2.5 bg-card/80">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <FileImage className="h-3 w-3 flex-shrink-0 text-primary/60" />
+                  <span className="text-xs truncate" title={img.fileName}>
+                    {img.fileName}
+                  </span>
                 </div>
-                <div className="p-2">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <FileImage className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
-                    <span className="text-xs truncate" title={img.fileName}>
-                      {img.fileName}
-                    </span>
-                  </div>
-                  <span className="text-[10px] text-muted-foreground">{formatSize(img.fileSize)}</span>
-                </div>
-              </CardContent>
-            </Card>
+                <span className="text-[10px] text-muted-foreground/60">{formatSize(img.fileSize)}</span>
+              </div>
+            </div>
           ))}
         </div>
       )}

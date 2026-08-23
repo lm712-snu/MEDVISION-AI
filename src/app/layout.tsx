@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'MedVision AI — Medical Multimodal Analysis Prototype',
-  description: 'Research-stage multimodal medical AI agent for MRI scan analysis. Not a certified medical device.',
+  title: 'MedVision AI — Multimodal Medical Analysis',
+  description: 'AI-powered multimodal medical image analysis with drug interaction checking.',
   icons: {
     icon: 'https://z-cdn.chatglm.cn/z-ai/static/logo.svg',
   },
