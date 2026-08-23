@@ -1,0 +1,81 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Case {
+  id          String   @id @default(cuid())
+  patientName String?
+  patientId   String?
+  scanType    String   @default("MRI")
+  bodyRegion  String?
+  notes       String?
+  status      String   @default("draft") // draft | analyzing | completed | escalated
+  urgencyFlag Boolean  @default(false)
+  oodFlag     Boolean  @default(false) // out-of-distribution
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  images       ImageUpload[]
+  prescriptions Prescription[]
+  analysis     AnalysisResult?
+  report       Report?
+}
+
+model ImageUpload {
+  id        String   @id @default(cuid())
+  caseId    String
+  fileName  String
+  fileKey   String   // stored path
+  mimeType  String
+  fileSize  Int
+  createdAt DateTime @default(now())
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+}
+
+model Prescription {
+  id            String   @id @default(cuid())
+  caseId        String
+  medicationName String
+  dosage        String?
+  frequency     String?
+  startDate     String?
+  notes         String?
+  source        String   @default("manual") // manual | ocr
+  createdAt     DateTime @default(now())
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+}
+
+model AnalysisResult {
+  id            String   @id @default(cuid())
+  caseId        String   @unique
+  findings      String   // JSON array of findings
+  regionsOfInterest String? // JSON array of regions
+  overallConfidence Float?
+  rawAnalysis   String?  // raw VLM response
+  prescriptionReview String? // JSON analysis of prescription relevance
+  drugInteractions  String? // JSON array of interaction flags
+  escalationReason  String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+}
+
+model Report {
+  id               String   @id @default(cuid())
+  caseId           String   @unique
+  clinicianReport  String   // markdown
+  patientSummary   String   // markdown
+  clinicianSigned  Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+}
