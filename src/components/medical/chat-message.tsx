@@ -1,14 +1,15 @@
 'use client';
 
-import Image from 'next/image';
 import { motion } from 'framer-motion';
 import type { ChatMessage } from '@/store/medical-store';
+
+const avatarSrc = `${process.env.NEXT_PUBLIC_BASE_PATH ?? ''}/doctor-avatar.svg`;
 
 function DoctorAvatar({ small = false }: { small?: boolean }) {
   return (
     <div className={`relative mt-0.5 flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-[#d7eee6] bg-[#e4f6f0] ${small ? 'h-9 w-9' : 'h-10 w-10'}`}>
-      <Image
-        src="/doctor-avatar.svg"
+      <img
+        src={avatarSrc}
         alt="MedVision AI assistant"
         width={40}
         height={45}
