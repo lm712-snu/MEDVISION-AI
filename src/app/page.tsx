@@ -343,43 +343,25 @@ export default function MedicalCopilotPage() {
 
   const handleRunAnalysis = useCallback(async () => {
     if (!currentCase) return;
+    const freshCase = useMedicalStore.getState().currentCase;
+    if (!freshCase?.images?.length) {
+      toast.info('Upload a scan image before requesting a visual review.');
+      setSidePanelView('case_overview');
+      return;
+    }
 
     setIsAnalyzing(true);
+    setSidePanelView('case_overview');
     addMessage({
-      role: 'system',
-      content: 'Analysis started...',
+      role: 'user',
+      content: 'Please review the scan image(s) attached to my active case and explain what can and cannot be cautiously observed. Use the case notes and our conversation for context. Separate visible observations from possibilities, do not invent findings or confidence scores, do not give a definitive diagnosis or treatment, and clearly state that this is not a validated radiology report. If the image quality or modality is insufficient, say so.',
     });
-
     try {
-      // Simulate analysis delay
-      await new Promise((resolve) => setTimeout(resolve, 2000 + Math.random() * 1500));
-
-      const { analysis, reports: analysisReports } = runAnalysis(currentCase.id);
-
-      const updatedCase = useMedicalStore.getState().cases.find(c => c.id === currentCase.id);
-      if (updatedCase) setCurrentCase(updatedCase);
-
-      setAnalysisData(analysis);
-      setReports(analysisReports);
-      setSidePanelView('findings');
-
-      addMessage({
-        role: 'assistant',
-        content: 'Analysis complete. I\'ve reviewed the scans and identified the key findings. You can see the full breakdown in the side panel — including confidence levels, regions of interest, and any drug interaction alerts. Would you like me to walk you through any specific finding?',
-      });
-
-      toast.success('Analysis completed successfully.');
-    } catch {
-      setError('Analysis failed. Please try again.');
-      addMessage({
-        role: 'assistant',
-        content: 'I ran into an issue running the analysis. This could be due to the image format or a temporary service issue. Could you try again?',
-      });
-      toast.error('Analysis failed.');
+      await runAiReply();
     } finally {
       setIsAnalyzing(false);
     }
-  }, [currentCase, addMessage, setCurrentCase, setAnalysisData, setReports, setSidePanelView, setIsAnalyzing, setError, runAnalysis]);
+  }, [currentCase, addMessage, setIsAnalyzing, setSidePanelView, runAiReply]);
 
   const handleGoHome = useCallback(() => {
     resetAll();
