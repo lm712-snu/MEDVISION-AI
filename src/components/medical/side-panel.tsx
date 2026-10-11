@@ -40,6 +40,7 @@ export function SidePanel({ onRunAnalysis, onRefreshCase }: SidePanelProps) {
     analysisData,
     reports,
     reportSigned,
+    messages,
   } = useMedicalStore();
 
   return (
@@ -71,6 +72,11 @@ export function SidePanel({ onRunAnalysis, onRefreshCase }: SidePanelProps) {
                   isAnalyzing={isAnalyzing}
                   onRunAnalysis={onRunAnalysis}
                   onRefreshCase={onRefreshCase}
+                  analysisText={(() => {
+                    const analysisPromptIndex = [...messages].map((message, index) => ({ message, index })).reverse().find(({ message }) => message.role === 'user' && message.content.includes('Please review the scan image(s) attached to my active case'))?.index;
+                    if (analysisPromptIndex === undefined) return null;
+                    return messages.slice(analysisPromptIndex + 1).find(message => message.role === 'assistant')?.content ?? null;
+                  })()}
                 />
               </motion.div>
             )}
@@ -160,11 +166,13 @@ function CaseOverviewView({
   isAnalyzing,
   onRunAnalysis,
   onRefreshCase,
+  analysisText,
 }: {
   case_: MedicalCase;
   isAnalyzing: boolean;
   onRunAnalysis: () => void;
   onRefreshCase: () => void;
+  analysisText: string | null;
 }) {
   const [notesOpen, setNotesOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -293,6 +301,29 @@ function CaseOverviewView({
           onChange={handleFileUpload}
         />
       </div>
+
+      {/* Actual AI review appears here after Run Analysis; no synthetic findings or confidence scores. */}
+      {(analysisText || isAnalyzing) && (
+        <div>
+          <h3 className="text-sm font-medium text-foreground flex items-center gap-1.5 mb-2">
+            <Activity className="h-4 w-4 text-primary/70" />
+            Analysis findings
+          </h3>
+          <Card className="p-3 border-border/50">
+            {isAnalyzing && !analysisText ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Reviewing the uploaded image with Gemini AI…
+              </div>
+            ) : (
+              <div className="text-sm text-foreground whitespace-pre-wrap break-words leading-relaxed">{analysisText}</div>
+            )}
+            <p className="mt-3 pt-2 border-t border-border/40 text-[11px] text-muted-foreground">
+              AI-assisted visual review only. This is not a validated radiology report; a qualified clinician must verify any observations.
+            </p>
+          </Card>
+        </div>
+      )}
 
       {/* Medications */}
       {case_.prescriptions && case_.prescriptions.length > 0 && (
