@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useEffect, useState } from 'react';
 import {
-  Brain, Plus, ShieldCheck, PanelRight,
+  Brain, Plus, ShieldCheck, PanelRight, House,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -278,6 +278,12 @@ export default function MedicalCopilotPage() {
     }
   }, [currentCase, addMessage, setCurrentCase, setAnalysisData, setReports, setSidePanelView, setIsAnalyzing, setError, runAnalysis]);
 
+  const handleGoHome = useCallback(() => {
+    resetAll();
+    setCaseFormVisible(false);
+    toast.success('Back at your home workspace. Your saved cases are kept.');
+  }, [resetAll]);
+
   const handleNewCase = useCallback(() => {
     resetAll();
     setCaseFormVisible(false);
@@ -293,7 +299,13 @@ export default function MedicalCopilotPage() {
     <div className="h-screen flex flex-col bg-background overflow-hidden">
       {/* ─── Top Nav Bar ─── */}
       <header className="flex-shrink-0 h-14 bg-white border-b border-border/50 flex items-center justify-between px-4 sm:px-5">
-        <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={handleGoHome}
+          aria-label="Return to MedVision AI home"
+          title="Return to home"
+          className="flex items-center gap-3 rounded-lg text-left transition-colors hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+        >
           <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
             <Brain className="h-4 w-4 text-primary" />
           </div>
@@ -301,9 +313,20 @@ export default function MedicalCopilotPage() {
             <h1 className="text-sm font-semibold text-foreground leading-tight">MedVision AI</h1>
             <p className="text-[11px] text-muted-foreground leading-tight">Clinical intelligence, alongside you</p>
           </div>
-        </div>
+        </button>
 
         <div className="flex items-center gap-2 sm:gap-3">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleGoHome}
+            aria-label="Return to home workspace"
+            className="h-8 text-xs gap-1.5 border-border/60 hover:border-primary/30"
+          >
+            <House className="h-3.5 w-3.5" />
+            <span>Home</span>
+          </Button>
+
           {currentCase && (
             <Badge variant="secondary" className="text-xs gap-1 hidden sm:inline-flex">
               <span className="h-1.5 w-1.5 rounded-full bg-primary inline-block" />
