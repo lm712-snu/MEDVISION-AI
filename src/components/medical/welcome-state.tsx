@@ -1,9 +1,10 @@
 'use client';
 
-import Image from 'next/image';
 import { ScanLine, MessageSquare, Pill, ArrowUpRight, Sparkles } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Card } from '@/components/ui/card';
+
+const avatarSrc = `${process.env.NEXT_PUBLIC_BASE_PATH ?? ''}/doctor-avatar.svg`;
 
 interface WelcomeStateProps {
   onAction: (action: 'upload_scan' | 'discuss_case' | 'review_meds') => void;
@@ -48,12 +49,11 @@ export function WelcomeState({ onAction }: WelcomeStateProps) {
       >
         <div className="mb-6 flex flex-col items-center justify-center gap-3 sm:flex-row sm:items-end sm:gap-5">
           <div className="relative flex h-40 w-40 shrink-0 items-end justify-center overflow-hidden rounded-[2rem] bg-gradient-to-br from-[#e5f7f1] to-[#d0eee5] sm:h-44 sm:w-44">
-            <Image
-              src="/doctor-avatar.svg"
+            <img
+              src={avatarSrc}
               alt="Friendly MedVision AI doctor assistant"
               width={160}
               height={180}
-              priority
               className="h-[180px] w-[160px] object-contain object-bottom"
             />
             <span className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-full bg-white text-[#168779] shadow-sm" aria-label="Ready to help">
