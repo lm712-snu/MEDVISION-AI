@@ -235,6 +235,26 @@ export default function MedicalCopilotPage() {
         content: message.content,
         attachments: message.attachments,
       }));
+      // Include scans previously uploaded through the case panel as image input too.
+      // Avoid duplicating images already attached directly in the chat history.
+      if (activeCase) {
+        const alreadyAttached = new Set(history.flatMap(message =>
+          (message.attachments ?? []).filter(attachment => attachment.type === 'image').map(attachment => attachment.name)
+        ));
+        const caseImages = activeCase.images
+          .filter(image => image.dataUrl && !alreadyAttached.has(image.fileName))
+          .slice(-3);
+        if (caseImages.length) {
+          const lastUserMessage = [...history].reverse().find(message => message.role === 'user');
+          if (lastUserMessage) {
+            lastUserMessage.attachments = [
+              ...(lastUserMessage.attachments ?? []),
+              ...caseImages.map(image => ({ type: 'image' as const, name: image.fileName, url: image.dataUrl })),
+            ];
+            lastUserMessage.content += '\\n\\nRelevant images from the active case are attached as visual context.';
+          }
+        }
+      }
       const result = await sendGeminiConversation({
         apiKey,
         messages: history,
