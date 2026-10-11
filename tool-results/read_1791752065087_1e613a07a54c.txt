@@ -1,0 +1,619 @@
+     1→'use client';
+     2→
+     3→import { useState, useCallback } from 'react';
+     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→import {
+     6→  Brain, Upload, Pill, PlayCircle, FileText, ArrowRight, ArrowLeft,
+     7→  Loader2, PlusCircle, RotateCcw, CheckCircle2, AlertTriangle,
+     8→  Sparkles, Activity, Layers, ScanSearch, Zap, Eye, FileBarChart
+     9→} from 'lucide-react';
+    10→import { Button } from '@/components/ui/button';
+    11→import { Input } from '@/components/ui/input';
+    12→import { Label } from '@/components/ui/label';
+    13→import { Textarea } from '@/components/ui/textarea';
+    14→import {
+    15→  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+    16→} from '@/components/ui/select';
+    17→import { Badge } from '@/components/ui/badge';
+    18→import { Skeleton } from '@/components/ui/skeleton';
+    19→import { toast } from 'sonner';
+    20→import { useMedicalStore, type WorkflowStep } from '@/store/medical-store';
+    21→import { ImageUploader } from '@/components/medical/image-uploader';
+    22→import { PrescriptionInput } from '@/components/medical/prescription-input';
+    23→import { FindingsViewer } from '@/components/medical/findings-viewer';
+    24→import { DrugInteractionAlerts } from '@/components/medical/drug-interaction-alerts';
+    25→import { ReportViewer } from '@/components/medical/report-viewer';
+    26→import { EscalationBanner, LowConfidenceBanner } from '@/components/medical/escalation-banner';
+    27→
+    28→const STEPS: { key: WorkflowStep; label: string; shortLabel: string; icon: typeof Brain }[] = [
+    29→  { key: 'setup', label: 'Case Setup', shortLabel: 'Setup', icon: Layers },
+    30→  { key: 'upload', label: 'Upload Scans', shortLabel: 'Scans', icon: Upload },
+    31→  { key: 'prescriptions', label: 'Medications', shortLabel: 'Meds', icon: Pill },
+    32→  { key: 'analyze', label: 'Analyze', shortLabel: 'Analyze', icon: PlayCircle },
+    33→  { key: 'results', label: 'Results', shortLabel: 'Results', icon: FileText },
+    34→];
+    35→
+    36→const BODY_REGIONS = [
+    37→  'Brain / Head',
+    38→  'Spine (Cervical)',
+    39→  'Spine (Thoracic)',
+    40→  'Spine (Lumbar)',
+    41→  'Knee',
+    42→  'Shoulder',
+    43→  'Hip',
+    44→  'Abdomen / Pelvis',
+    45→  'Chest / Thorax',
+    46→  'Other',
+    47→];
+    48→
+    49→const slideVariants = {
+    50→  enter: (direction: number) => ({
+    51→    x: direction > 0 ? 80 : -80,
+    52→    opacity: 0,
+    53→    filter: 'blur(4px)',
+    54→  }),
+    55→  center: {
+    56→    x: 0,
+    57→    opacity: 1,
+    58→    filter: 'blur(0px)',
+    59→  },
+    60→  exit: (direction: number) => ({
+    61→    x: direction > 0 ? -80 : 80,
+    62→    opacity: 0,
+    63→    filter: 'blur(4px)',
+    64→  }),
+    65→};
+    66→
+    67→export default function HomePage() {
+    68→  const store = useMedicalStore();
+    69→  const [isCreating, setIsCreating] = useState(false);
+    70→  const [signed, setSigned] = useState(false);
+    71→  const [direction, setDirection] = useState(1);
+    72→
+    73→  const stepIndex = STEPS.findIndex((s) => s.key === store.workflowStep);
+    74→
+    75→  const navigateTo = (step: WorkflowStep, dir: number) => {
+    76→    setDirection(dir);
+    77→    store.setWorkflowStep(step);
+    78→  };
+    79→
+    80→  const canGoNext = useCallback(() => {
+    81→    switch (store.workflowStep) {
+    82→      case 'setup': return store.currentCase !== null;
+    83→      case 'upload': return store.currentCase && (store.currentCase as any).images?.length > 0;
+    84→      case 'prescriptions': return true;
+    85→      case 'analyze': return false;
+    86→      case 'results': return false;
+    87→      default: return false;
+    88→    }
+    89→  }, [store.workflowStep, store.currentCase]);
+    90→
+    91→  const createCase = async () => {
+    92→    setIsCreating(true);
+    93→    try {
+    94→      const res = await fetch('/api/cases', {
+    95→        method: 'POST',
+    96→        headers: { 'Content-Type': 'application/json' },
+    97→        body: JSON.stringify({
+    98→          patientName: store.draftCase.patientName || undefined,
+    99→          patientId: store.draftCase.patientId || undefined,
+   100→          scanType: store.draftCase.scanType,
+   101→          bodyRegion: store.draftCase.bodyRegion || undefined,
+   102→          notes: store.draftCase.notes || undefined,
+   103→        }),
+   104→      });
+   105→      if (!res.ok) throw new Error('Failed to create case');
+   106→      const data = await res.json();
+   107→      store.setCurrentCase(data.case as any);
+   108→      navigateTo('upload', 1);
+   109→      toast.success('Case created successfully.');
+   110→    } catch {
+   111→      toast.error('Failed to create case.');
+   112→    } finally {
+   113→      setIsCreating(false);
+   114→    }
+   115→  };
+   116→
+   117→  const refreshCase = useCallback(async () => {
+   118→    if (!store.currentCase) return;
+   119→    try {
+   120→      const res = await fetch(`/api/cases/${store.currentCase.id}`);
+   121→      if (!res.ok) return;
+   122→      const data = await res.json();
+   123→      store.setCurrentCase(data.case as any);
+   124→    } catch { /* */ }
+   125→  }, [store.currentCase]);
+   126→
+   127→  const runAnalysis = async () => {
+   128→    if (!store.currentCase) return;
+   129→    store.setIsAnalyzing(true);
+   130→    store.setError(null);
+   131→    try {
+   132→      const res = await fetch(`/api/cases/${store.currentCase.id}/analyze`, {
+   133→        method: 'POST',
+   134→      });
+   135→      if (!res.ok) {
+   136→        const errData = await res.json().catch(() => ({}));
+   137→        throw new Error(errData.error || 'Analysis failed');
+   138→      }
+   139→      const data = await res.json();
+   140→      store.setAnalysisData(data.analysis);
+   141→      store.setReports(data.reports);
+   142→      navigateTo('results', 1);
+   143→      toast.success('Analysis complete.');
+   144→    } catch (err: any) {
+   145→      store.setError(err.message);
+   146→      toast.error(`Analysis failed: ${err.message}`);
+   147→    } finally {
+   148→      store.setIsAnalyzing(false);
+   149→    }
+   150→  };
+   151→
+   152→  const toggleSign = async () => {
+   153→    if (!store.currentCase) return;
+   154→    try {
+   155→      const res = await fetch(`/api/cases/${store.currentCase.id}/sign-report`, {
+   156→        method: 'POST',
+   157→        headers: { 'Content-Type': 'application/json' },
+   158→        body: JSON.stringify({ signed: !signed }),
+   159→      });
+   160→      if (!res.ok) throw new Error('Failed to update');
+   161→      setSigned(!signed);
+   162→      toast.success(!signed ? 'Report signed off.' : 'Report signature removed.');
+   163→    } catch {
+   164→      toast.error('Failed to update report status.');
+   165→    }
+   166→  };
+   167→
+   168→  const handleNewCase = () => {
+   169→    store.resetDraft();
+   170→    setSigned(false);
+   171→  };
+   172→
+   173→  return (
+   174→    <div className="min-h-screen flex flex-col bg-background">
+   175→      {/* Hero Header */}
+   176→      <header className="relative overflow-hidden border-b border-border/50">
+   177→        <div className="absolute inset-0 z-0">
+   178→          <div
+   179→            className="absolute inset-0 bg-cover bg-center opacity-30"
+   180→            style={{ backgroundImage: 'url(/hero-bg.png)' }}
+   181→          />
+   182→          <div className="hero-overlay absolute inset-0" />
+   183→        </div>
+   184→        <div className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between">
+   185→          <div className="flex items-center gap-3.5">
+   186→            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-[oklch(0.72_0.15_170)] to-[oklch(0.65_0.18_140)] flex items-center justify-center glow-subtle animate-float">
+   187→              <Brain className="h-5.5 w-5.5 text-white" />
+   188→            </div>
+   189→            <div>
+   190→              <h1 className="text-lg font-bold tracking-tight leading-none gradient-text">
+   191→                MedVision AI
+   192→              </h1>
+   193→              <p className="text-[11px] text-muted-foreground/80 leading-none mt-1 font-medium">
+   194→                Multimodal Medical Analysis
+   195→              </p>
+   196→            </div>
+   197→          </div>
+   198→          <div className="hidden sm:flex items-center gap-2">
+   199→            <Badge variant="outline" className="text-[10px] border-primary/30 text-primary/80 bg-primary/5 font-medium">
+   200→              <Sparkles className="h-3 w-3 mr-1" />
+   201→              AI-Powered
+   202→            </Badge>
+   203→          </div>
+   204→        </div>
+   205→      </header>
+   206→
+   207→      {/* Step Indicator */}
+   208→      <div className="border-b border-border/50 bg-secondary/30">
+   209→        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3.5">
+   210→          <div className="flex items-center gap-0">
+   211→            {STEPS.map((step, idx) => {
+   212→              const isActive = store.workflowStep === step.key;
+   213→              const isCompleted = idx < stepIndex;
+   214→              const Icon = step.icon;
+   215→              return (
+   216→                <div key={step.key} className="flex items-center flex-1 last:flex-none">
+   217→                  <button
+   218→                    onClick={() => {
+   219→                      if (isCompleted || isActive) navigateTo(step.key, idx < stepIndex ? -1 : 1);
+   220→                    }}
+   221→                    disabled={!isCompleted && !isActive}
+   222→                    className={`relative flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium transition-all duration-300 whitespace-nowrap ${
+   223→                      isActive
+   224→                        ? 'bg-primary/15 text-primary glow-subtle'
+   225→                        : isCompleted
+   226→                        ? 'text-primary/70 hover:bg-primary/5 cursor-pointer'
+   227→                        : 'text-muted-foreground/40 cursor-not-allowed'
+   228→                    }`}
+   229→                  >
+   230→                    <div className={`h-7 w-7 rounded-lg flex items-center justify-center transition-all duration-300 ${
+   231→                      isActive
+   232→                        ? 'bg-primary text-primary-foreground shadow-md'
+   233→                        : isCompleted
+   234→                        ? 'bg-primary/20 text-primary'
+   235→                        : 'bg-muted/50 text-muted-foreground/40'
+   236→                    }`}>
+   237→                      {isCompleted ? (
+   238→                        <CheckCircle2 className="h-3.5 w-3.5" />
+   239→                      ) : (
+   240→                        <Icon className="h-3.5 w-3.5" />
+   241→                      )}
+   242→                    </div>
+   243→                    <span className="hidden sm:inline">{step.label}</span>
+   244→                    <span className="sm:hidden">{step.shortLabel}</span>
+   245→                  </button>
+   246→                  {idx < STEPS.length - 1 && (
+   247→                    <div className={`step-connector mx-1 rounded-full ${
+   248→                      idx < stepIndex ? 'completed' : isActive ? 'active' : ''
+   249→                    }`} />
+   250→                  )}
+   251→                </div>
+   252→              );
+   253→            })}
+   254→          </div>
+   255→        </div>
+   256→      </div>
+   257→
+   258→      {/* Main Content */}
+   259→      <main className="flex-1 max-w-5xl mx-auto w-full px-4 sm:px-6 py-6">
+   260→        <AnimatePresence mode="wait" custom={direction}>
+   261→          <motion.div
+   262→            key={store.workflowStep}
+   263→            custom={direction}
+   264→            variants={slideVariants}
+   265→            initial="enter"
+   266→            animate="center"
+   267→            exit="exit"
+   268→            transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
+   269→          >
+   270→            {/* SETUP STEP */}
+   271→            {store.workflowStep === 'setup' && (
+   272→              <div className="space-y-5">
+   273→                <div>
+   274→                  <h2 className="text-xl font-bold tracking-tight">New Analysis Case</h2>
+   275→                  <p className="text-sm text-muted-foreground mt-1">
+   276→                    Set up a new case for multimodal medical image analysis.
+   277→                  </p>
+   278→                </div>
+   279→                <div className="glass-card rounded-2xl p-6 space-y-5 gradient-border">
+   280→                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+   281→                    <div>
+   282→                      <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Patient Identifier</Label>
+   283→                      <Input
+   284→                        placeholder="e.g., MRN-001234"
+   285→                        value={store.draftCase.patientId}
+   286→                        onChange={(e) => store.setDraftCase({ patientId: e.target.value })}
+   287→                        className="mt-1.5 bg-background/50 border-border/50 focus:border-primary/50"
+   288→                      />
+   289→                    </div>
+   290→                    <div>
+   291→                      <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Patient Name</Label>
+   292→                      <Input
+   293→                        placeholder="e.g., John D."
+   294→                        value={store.draftCase.patientName}
+   295→                        onChange={(e) => store.setDraftCase({ patientName: e.target.value })}
+   296→                        className="mt-1.5 bg-background/50 border-border/50 focus:border-primary/50"
+   297→                      />
+   298→                    </div>
+   299→                  </div>
+   300→                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+   301→                    <div>
+   302→                      <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Scan Type</Label>
+   303→                      <Select
+   304→                        value={store.draftCase.scanType}
+   305→                        onValueChange={(v) => store.setDraftCase({ scanType: v })}
+   306→                      >
+   307→                        <SelectTrigger className="mt-1.5 bg-background/50 border-border/50">
+   308→                          <SelectValue />
+   309→                        </SelectTrigger>
+   310→                        <SelectContent>
+   311→                          <SelectItem value="MRI">MRI</SelectItem>
+   312→                          <SelectItem value="CT">CT</SelectItem>
+   313→                          <SelectItem value="X-Ray">X-Ray</SelectItem>
+   314→                          <SelectItem value="Ultrasound">Ultrasound</SelectItem>
+   315→                        </SelectContent>
+   316→                      </Select>
+   317→                    </div>
+   318→                    <div>
+   319→                      <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Body Region</Label>
+   320→                      <Select
+   321→                        value={store.draftCase.bodyRegion}
+   322→                        onValueChange={(v) => store.setDraftCase({ bodyRegion: v })}
+   323→                      >
+   324→                        <SelectTrigger className="mt-1.5 bg-background/50 border-border/50">
+   325→                          <SelectValue placeholder="Select region..." />
+   326→                        </SelectTrigger>
+   327→                        <SelectContent>
+   328→                          {BODY_REGIONS.map((r) => (
+   329→                            <SelectItem key={r} value={r}>{r}</SelectItem>
+   330→                          ))}
+   331→                        </SelectContent>
+   332→                      </Select>
+   333→                    </div>
+   334→                  </div>
+   335→                  <div>
+   336→                    <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Clinical Notes</Label>
+   337→                    <Textarea
+   338→                      placeholder="Any relevant clinical context for the analysis..."
+   339→                      value={store.draftCase.notes}
+   340→                      onChange={(e) => store.setDraftCase({ notes: e.target.value })}
+   341→                      className="mt-1.5 bg-background/50 border-border/50 focus:border-primary/50"
+   342→                      rows={3}
+   343→                    />
+   344→                  </div>
+   345→                  <div className="flex justify-end pt-1">
+   346→                    <Button
+   347→                      onClick={createCase}
+   348→                      disabled={isCreating}
+   349→                      className="bg-gradient-to-r from-[oklch(0.72_0.15_170)] to-[oklch(0.65_0.18_140)] text-white border-0 hover:opacity-90 shadow-lg shadow-primary/20"
+   350→                    >
+   351→                      {isCreating ? (
+   352→                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+   353→                      ) : (
+   354→                        <PlusCircle className="h-4 w-4 mr-2" />
+   355→                      )}
+   356→                      Create Case
+   357→                    </Button>
+   358→                  </div>
+   359→                </div>
+   360→              </div>
+   361→            )}
+   362→
+   363→            {/* UPLOAD STEP */}
+   364→            {store.workflowStep === 'upload' && store.currentCase && (
+   365→              <div className="space-y-5">
+   366→                <div>
+   367→                  <h2 className="text-xl font-bold tracking-tight">Upload MRI Scans</h2>
+   368→                  <p className="text-sm text-muted-foreground mt-1">
+   369→                    Upload the patient&apos;s MRI scan images. Multiple slices or views supported.
+   370→                  </p>
+   371→                </div>
+   372→                <div className="glass-card rounded-2xl p-6 gradient-border">
+   373→                  <ImageUploader
+   374→                    caseId={store.currentCase.id}
+   375→                    images={(store.currentCase as any).images || []}
+   376→                    onUploadComplete={refreshCase}
+   377→                  />
+   378→                </div>
+   379→              </div>
+   380→            )}
+   381→
+   382→            {/* PRESCRIPTIONS STEP */}
+   383→            {store.workflowStep === 'prescriptions' && store.currentCase && (
+   384→              <div className="space-y-5">
+   385→                <div>
+   386→                  <h2 className="text-xl font-bold tracking-tight">Patient Medications</h2>
+   387→                  <p className="text-sm text-muted-foreground mt-1">
+   388→                    Add current prescriptions for drug interaction checking. This step is optional.
+   389→                  </p>
+   390→                </div>
+   391→                <div className="glass-card rounded-2xl p-6 gradient-border">
+   392→                  <PrescriptionInput
+   393→                    caseId={store.currentCase.id}
+   394→                    existingPrescriptions={(store.currentCase as any).prescriptions || []}
+   395→                    onComplete={refreshCase}
+   396→                  />
+   397→                </div>
+   398→              </div>
+   399→            )}
+   400→
+   401→            {/* ANALYZE STEP */}
+   402→            {store.workflowStep === 'analyze' && store.currentCase && (
+   403→              <div className="space-y-5">
+   404→                <div>
+   405→                  <h2 className="text-xl font-bold tracking-tight">Run Analysis Pipeline</h2>
+   406→                  <p className="text-sm text-muted-foreground mt-1">
+   407→                    The AI pipeline will analyze your scans, check drug interactions, and generate dual reports.
+   408→                  </p>
+   409→                </div>
+   410→                <div className="glass-card rounded-2xl p-6 space-y-6 gradient-border">
+   411→                  {/* Pipeline steps */}
+   412→                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+   413→                    {[
+   414→                      { icon: Eye, label: 'Vision Analysis', desc: 'VLM-powered MRI scan analysis with confidence scoring', color: 'from-teal-500/20 to-emerald-500/20', iconColor: 'text-teal-400' },
+   415→                      { icon: Pill, label: 'Prescription Review', desc: 'Cross-reference medications with imaging findings', color: 'from-violet-500/20 to-purple-500/20', iconColor: 'text-violet-400' },
+   416→                      { icon: AlertTriangle, label: 'Drug Interactions', desc: 'Flag known interactions from clinical database', color: 'from-amber-500/20 to-orange-500/20', iconColor: 'text-amber-400' },
+   417→                      { icon: FileBarChart, label: 'Dual Reports', desc: 'Clinician report + patient-friendly summary', color: 'from-rose-500/20 to-pink-500/20', iconColor: 'text-rose-400' },
+   418→                    ].map((item, i) => (
+   419→                      <motion.div
+   420→                        key={i}
+   421→                        initial={{ opacity: 0, y: 10 }}
+   422→                        animate={{ opacity: 1, y: 0 }}
+   423→                        transition={{ delay: i * 0.1 }}
+   424→                        className={`flex items-start gap-3 p-4 rounded-xl bg-gradient-to-br ${item.color} border border-border/50`}
+   425→                      >
+   426→                        <div className="h-9 w-9 rounded-lg bg-background/40 flex items-center justify-center flex-shrink-0">
+   427→                          <item.icon className={`h-4.5 w-4.5 ${item.iconColor}`} />
+   428→                        </div>
+   429→                        <div>
+   430→                          <p className="text-sm font-semibold">{item.label}</p>
+   431→                          <p className="text-xs text-muted-foreground mt-0.5">{item.desc}</p>
+   432→                        </div>
+   433→                      </motion.div>
+   434→                    ))}
+   435→                  </div>
+   436→
+   437→                  {/* Case summary */}
+   438→                  <div className="rounded-xl border border-border/50 bg-background/30 p-4 space-y-3">
+   439→                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Case Summary</h4>
+   440→                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+   441→                      {[
+   442→                        { label: 'Patient ID', value: store.currentCase.patientId || '—' },
+   443→                        { label: 'Scan Type', value: store.currentCase.scanType },
+   444→                        { label: 'Body Region', value: store.currentCase.bodyRegion || '—' },
+   445→                        { label: 'Images', value: `${(store.currentCase as any).images?.length || 0} file(s)` },
+   446→                      ].map((item, i) => (
+   447→                        <div key={i}>
+   448→                          <span className="text-[10px] text-muted-foreground uppercase tracking-wider">{item.label}</span>
+   449→                          <p className="text-sm font-medium mt-0.5">{item.value}</p>
+   450→                        </div>
+   451→                      ))}
+   452→                    </div>
+   453→                  </div>
+   454→
+   455→                  {store.error && (
+   456→                    <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-4">
+   457→                      <p className="text-sm text-destructive font-medium">Analysis Error</p>
+   458→                      <p className="text-sm text-muted-foreground mt-1">{store.error}</p>
+   459→                    </div>
+   460→                  )}
+   461→
+   462→                  <div className="flex justify-center pt-2">
+   463→                    <motion.div
+   464→                      whileHover={{ scale: 1.03 }}
+   465→                      whileTap={{ scale: 0.98 }}
+   466→                    >
+   467→                      <Button
+   468→                        size="lg"
+   469→                        onClick={runAnalysis}
+   470→                        disabled={store.isAnalyzing}
+   471→                        className="px-10 py-6 text-base bg-gradient-to-r from-[oklch(0.72_0.15_170)] via-[oklch(0.65_0.18_140)] to-[oklch(0.72_0.15_170)] bg-[length:200%_100%] text-white border-0 shadow-xl shadow-primary/25 hover:shadow-primary/40 transition-shadow animate-[gradient-shift_3s_ease_infinite]
+   472→                          disabled:opacity-60"
+   473→                      >
+   474→                        {store.isAnalyzing ? (
+   475→                          <>
+   476→                            <Loader2 className="h-5 w-5 mr-2.5 animate-spin" />
+   477→                            Analyzing Scans...
+   478→                          </>
+   479→                        ) : (
+   480→                          <>
+   481→                            <Zap className="h-5 w-5 mr-2.5" />
+   482→                            Start Analysis
+   483→                          </>
+   484→                        )}
+   485→                      </Button>
+   486→                    </motion.div>
+   487→                  </div>
+   488→
+   489→                  {store.isAnalyzing && (
+   490→                    <div className="space-y-3 pt-2">
+   491→                      <div className="flex items-center gap-3">
+   492→                        <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+   493→                          <div className="h-full rounded-full shimmer w-full" style={{ backgroundSize: '200% 100%' }} />
+   494→                        </div>
+   495→                        <span className="text-xs text-primary font-medium">Processing</span>
+   496→                      </div>
+   497→                      <p className="text-xs text-muted-foreground text-center">
+   498→                        Running vision analysis, drug interaction checks, and generating reports...
+   499→                      </p>
+   500→                    </div>
+   501→                  )}
+   502→                </div>
+   503→              </div>
+   504→            )}
+   505→
+   506→            {/* RESULTS STEP */}
+   507→            {store.workflowStep === 'results' && store.analysisData && store.reports && (
+   508→              <div className="space-y-5">
+   509→                <div className="flex items-start justify-between gap-4">
+   510→                  <div>
+   511→                    <h2 className="text-xl font-bold tracking-tight">Analysis Results</h2>
+   512→                    <p className="text-sm text-muted-foreground mt-1">
+   513→                      {(store.currentCase?.patientId || 'Case')} — {store.currentCase?.scanType} {store.currentCase?.bodyRegion ? `· ${store.currentCase.bodyRegion}` : ''}
+   514→                    </p>
+   515→                  </div>
+   516→                  <div className="flex flex-wrap items-center gap-2">
+   517→                    {store.currentCase?.status === 'escalated' ? (
+   518→                      <Badge variant="destructive" className="text-xs">
+   519→                        <AlertTriangle className="h-3 w-3 mr-1" /> Escalated
+   520→                      </Badge>
+   521→                    ) : (
+   522→                      <Badge className="text-xs bg-emerald-500/20 text-emerald-400 border-emerald-500/30">
+   523→                        <CheckCircle2 className="h-3 w-3 mr-1" /> Completed
+   524→                      </Badge>
+   525→                    )}
+   526→                    <Badge variant="outline" className="text-xs border-primary/30 text-primary/80">
+   527→                      <Activity className="h-3 w-3 mr-1" />
+   528→                      {(store.analysisData.overallConfidence * 100).toFixed(0)}% confidence
+   529→                    </Badge>
+   530→                    {store.analysisData.findings.length > 0 && (
+   531→                      <Badge variant="outline" className="text-xs border-border/50">
+   532→                        <ScanSearch className="h-3 w-3 mr-1" />
+   533→                        {store.analysisData.findings.length} finding(s)
+   534→                      </Badge>
+   535→                    )}
+   536→                  </div>
+   537→                </div>
+   538→
+   539→                <EscalationBanner
+   540→                  isUrgent={store.analysisData.isUrgent}
+   541→                  isOOD={store.analysisData.isOOD}
+   542→                  reason={store.analysisData.escalationReason}
+   543→                />
+   544→                <LowConfidenceBanner confidence={store.analysisData.overallConfidence} />
+   545→
+   546→                <FindingsViewer
+   547→                  findings={store.analysisData.findings}
+   548→                  overallConfidence={store.analysisData.overallConfidence}
+   549→                  regionsOfInterest={store.analysisData.regionsOfInterest}
+   550→                />
+   551→
+   552→                <DrugInteractionAlerts
+   553→                  interactions={store.analysisData.drugInteractions}
+   554→                  prescriptionReview={store.analysisData.prescriptionReview}
+   555→                />
+   556→
+   557→                <ReportViewer
+   558→                  clinicianReport={store.reports.clinicianReport}
+   559→                  patientSummary={store.reports.patientSummary}
+   560→                  isSigned={signed}
+   561→                  caseId={store.currentCase?.id || ''}
+   562→                  onSignToggle={toggleSign}
+   563→                />
+   564→              </div>
+   565→            )}
+   566→          </motion.div>
+   567→        </AnimatePresence>
+   568→
+   569→        {/* Navigation */}
+   570→        {store.workflowStep !== 'results' && store.workflowStep !== 'setup' && store.workflowStep !== 'analyze' && (
+   571→          <div className="flex items-center justify-between pt-4">
+   572→            <Button
+   573→              variant="ghost"
+   574→              onClick={() => navigateTo(STEPS[stepIndex - 1].key, -1)}
+   575→              disabled={stepIndex <= 0}
+   576→              className="text-muted-foreground hover:text-foreground"
+   577→            >
+   578→              <ArrowLeft className="h-4 w-4 mr-2" />
+   579→              Back
+   580→            </Button>
+   581→            <Button
+   582→              onClick={() => navigateTo(STEPS[stepIndex + 1].key, 1)}
+   583→              disabled={!canGoNext()}
+   584→              className="bg-gradient-to-r from-[oklch(0.72_0.15_170)] to-[oklch(0.65_0.18_140)] text-white border-0 hover:opacity-90"
+   585→            >
+   586→              Next
+   587→              <ArrowRight className="h-4 w-4 ml-2" />
+   588→            </Button>
+   589→          </div>
+   590→        )}
+   591→
+   592→        {store.workflowStep === 'results' && (
+   593→          <div className="flex justify-center pt-4">
+   594→            <Button variant="ghost" onClick={handleNewCase} className="text-muted-foreground hover:text-foreground">
+   595→              <RotateCcw className="h-4 w-4 mr-2" />
+   596→              Start New Case
+   597→            </Button>
+   598→          </div>
+   599→        )}
+   600→      </main>
+   601→
+   602→      {/* Footer */}
+   603→      <footer className="border-t border-border/50 bg-secondary/20 mt-auto">
+   604→        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-4">
+   605→          <div className="flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-muted-foreground/60">
+   606→            <p className="flex items-center gap-1.5">
+   607→              <Brain className="h-3 w-3" />
+   608→              <span>MedVision AI</span>
+   609→              <span className="text-muted-foreground/30">·</span>
+   610→              <span>Research Prototype</span>
+   611→            </p>
+   612→            <p>All outputs require clinician verification.</p>
+   613→          </div>
+   614→        </div>
+   615→      </footer>
+   616→    </div>
+   617→  );
+   618→}
+   619→

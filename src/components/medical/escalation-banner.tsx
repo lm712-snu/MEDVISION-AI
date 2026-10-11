@@ -2,46 +2,27 @@
 
 import { AlertTriangle, AlertOctagon, Brain } from 'lucide-react';
 
-interface EscalationBannerProps {
-  isUrgent: boolean;
-  isOOD: boolean;
-  reason: string | null;
-}
+interface EscalationBannerProps { isUrgent: boolean; isOOD: boolean; reason: string | null; }
 
 export function EscalationBanner({ isUrgent, isOOD, reason }: EscalationBannerProps) {
   if (!isUrgent && !isOOD) return null;
-
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       {isOOD && (
-        <div className="rounded-xl border border-violet-500/30 bg-violet-500/8 p-4 pulse-glow">
-          <div className="flex items-start gap-3">
-            <div className="h-8 w-8 rounded-lg bg-violet-500/20 flex items-center justify-center flex-shrink-0">
-              <Brain className="h-4 w-4 text-violet-400" />
-            </div>
-            <div>
-              <h4 className="text-sm font-semibold text-violet-300">Out-of-Distribution Input</h4>
-              <p className="text-xs text-foreground/70 mt-1 leading-relaxed">
-                The uploaded images may not be recognizable as standard MRI scans, or represent an
-                unusual presentation. Manual radiologist review is required.
-              </p>
-            </div>
+        <div className="rounded-xl border border-violet-300 bg-violet-50 p-3.5 flex items-start gap-3">
+          <Brain className="h-4 w-4 text-violet-600 mt-0.5 flex-shrink-0" />
+          <div>
+            <h4 className="text-sm font-semibold text-violet-800">Out-of-distribution input</h4>
+            <p className="text-xs text-violet-700/80 mt-0.5">These images may not be standard MRI scans. Manual radiologist review required.</p>
           </div>
         </div>
       )}
       {isUrgent && (
-        <div className="rounded-xl border border-red-500/30 bg-red-500/8 p-4">
-          <div className="flex items-start gap-3">
-            <div className="h-8 w-8 rounded-lg bg-red-500/20 flex items-center justify-center flex-shrink-0">
-              <AlertOctagon className="h-4 w-4 text-red-400" />
-            </div>
-            <div>
-              <h4 className="text-sm font-semibold text-red-400">Flagged for Immediate Review</h4>
-              <p className="text-xs text-foreground/70 mt-1 leading-relaxed">
-                This case has been escalated for urgent clinician review.
-                {reason && <span className="block mt-1 font-medium text-red-400/80">{reason}</span>}
-              </p>
-            </div>
+        <div className="rounded-xl border border-red-300 bg-red-50 p-3.5 flex items-start gap-3">
+          <AlertOctagon className="h-4 w-4 text-red-600 mt-0.5 flex-shrink-0" />
+          <div>
+            <h4 className="text-sm font-semibold text-red-800">Flagged for immediate review</h4>
+            <p className="text-xs text-red-700/80 mt-0.5">This case requires urgent clinician review.{reason && <span className="block mt-0.5 font-medium">{reason}</span>}</p>
           </div>
         </div>
       )}
@@ -52,19 +33,11 @@ export function EscalationBanner({ isUrgent, isOOD, reason }: EscalationBannerPr
 export function LowConfidenceBanner({ confidence }: { confidence: number }) {
   if (confidence >= 0.4) return null;
   return (
-    <div className="rounded-xl border border-amber-500/30 bg-amber-500/8 p-4">
-      <div className="flex items-start gap-3">
-        <div className="h-8 w-8 rounded-lg bg-amber-500/20 flex items-center justify-center flex-shrink-0">
-          <AlertTriangle className="h-4 w-4 text-amber-400" />
-        </div>
-        <div>
-          <h4 className="text-sm font-semibold text-amber-400">
-            Low Confidence ({(confidence * 100).toFixed(0)}%)
-          </h4>
-          <p className="text-xs text-foreground/70 mt-1 leading-relaxed">
-            Analysis confidence is below threshold. All findings should be verified by a radiologist.
-          </p>
-        </div>
+    <div className="rounded-xl border border-amber-300 bg-amber-50 p-3.5 flex items-start gap-3">
+      <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
+      <div>
+        <h4 className="text-sm font-semibold text-amber-800">Low confidence ({(confidence * 100).toFixed(0)}%)</h4>
+        <p className="text-xs text-amber-700/80 mt-0.5">All findings should be verified by a radiologist.</p>
       </div>
     </div>
   );

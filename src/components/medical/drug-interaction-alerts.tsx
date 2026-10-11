@@ -11,97 +11,49 @@ interface DrugInteractionAlertsProps {
 }
 
 function getInteractionIcon(severity: string) {
-  switch (severity) {
-    case 'contraindicated': return XCircle;
-    case 'severe': return AlertTriangle;
-    case 'moderate': return AlertCircle;
-    default: return Info;
-  }
+  switch (severity) { case 'contraindicated': return XCircle; case 'severe': return AlertTriangle; case 'moderate': return AlertCircle; default: return Info; }
 }
-
 function getInteractionStyle(severity: string) {
-  switch (severity) {
-    case 'contraindicated': return 'border-red-500/40 bg-red-500/8';
-    case 'severe': return 'border-red-500/25 bg-red-500/5';
-    case 'moderate': return 'border-amber-500/25 bg-amber-500/5';
-    default: return 'border-yellow-500/20 bg-yellow-500/5';
-  }
+  switch (severity) { case 'contraindicated': return 'border-red-300 bg-red-50'; case 'severe': return 'border-red-200 bg-red-50/50'; case 'moderate': return 'border-amber-200 bg-amber-50/50'; default: return 'border-border bg-muted/30'; }
 }
-
 function getSeverityColor(severity: string) {
-  switch (severity) {
-    case 'contraindicated': return 'bg-red-500/20 text-red-400 border-red-500/30';
-    case 'severe': return 'bg-red-500/15 text-red-400 border-red-500/25';
-    case 'moderate': return 'bg-amber-500/15 text-amber-400 border-amber-500/25';
-    default: return 'bg-yellow-500/15 text-yellow-400 border-yellow-500/25';
-  }
-}
-
-function getSeverityIconColor(severity: string) {
-  switch (severity) {
-    case 'contraindicated': return 'text-red-400';
-    case 'severe': return 'text-red-400';
-    case 'moderate': return 'text-amber-400';
-    default: return 'text-yellow-400';
-  }
+  switch (severity) { case 'contraindicated': return 'bg-red-100 text-red-700'; case 'severe': return 'bg-red-50 text-red-600'; case 'moderate': return 'bg-amber-50 text-amber-600'; default: return 'bg-muted text-muted-foreground'; }
 }
 
 export function DrugInteractionAlerts({ interactions, prescriptionReview }: DrugInteractionAlertsProps) {
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
-
   if (interactions.length === 0 && !prescriptionReview) return null;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {interactions.length > 0 && (
-        <div className="glass-card rounded-2xl p-5">
-          <div className="flex items-center gap-2.5 mb-4">
-            <div className="h-8 w-8 rounded-lg bg-destructive/15 flex items-center justify-center">
-              <Pill className="h-4 w-4 text-destructive" />
-            </div>
-            <div>
-              <h3 className="text-sm font-semibold">Drug Interaction Alerts</h3>
-              <p className="text-xs text-muted-foreground">{interactions.length} interaction(s) detected</p>
-            </div>
+        <div className="rounded-xl border border-border bg-card p-4 warm-card-hover">
+          <div className="flex items-center gap-2 mb-3">
+            <Pill className="h-4 w-4 text-primary" />
+            <h3 className="text-sm font-medium">Drug interactions</h3>
+            <Badge variant="destructive" className="text-[10px] ml-1">{interactions.length}</Badge>
           </div>
-
-          <div className="space-y-2.5">
+          <div className="space-y-2">
             {interactions.map((interaction, index) => {
               const Icon = getInteractionIcon(interaction.severity);
               const isExpanded = expandedIdx === index;
               return (
-                <div
-                  key={index}
-                  className={`rounded-xl border p-4 transition-all duration-200 hover:border-opacity-60 ${getInteractionStyle(interaction.severity)}`}
-                >
-                  <button
-                    className="w-full text-left flex items-start gap-2.5"
-                    onClick={() => setExpandedIdx(isExpanded ? null : index)}
-                  >
-                    <Icon className={`h-4.5 w-4.5 mt-0.5 flex-shrink-0 ${getSeverityIconColor(interaction.severity)}`} />
+                <div key={index} className={`rounded-lg border p-3 ${getInteractionStyle(interaction.severity)}`}>
+                  <button className="w-full text-left flex items-start gap-2" onClick={() => setExpandedIdx(isExpanded ? null : index)}>
+                    <Icon className="h-4 w-4 mt-0.5 flex-shrink-0 text-foreground/60" />
                     <div className="flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <Badge className={`text-[10px] font-semibold ${getSeverityColor(interaction.severity)} border`}>
-                          {interaction.severity.toUpperCase()}
-                        </Badge>
-                        <span className="text-sm font-medium">
-                          {interaction.drug1} + {interaction.drug2}
-                        </span>
-                        <span className="text-xs ml-auto text-muted-foreground/50">
-                          {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                        </span>
+                        <Badge className={`text-[10px] ${getSeverityColor(interaction.severity)}`}>{interaction.severity.toUpperCase()}</Badge>
+                        <span className="text-sm font-medium">{interaction.drug1} + {interaction.drug2}</span>
+                        <span className="text-xs ml-auto text-muted-foreground">{isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}</span>
                       </div>
-                      <p className="text-xs text-foreground/70 mt-1.5 leading-relaxed">{interaction.description}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{interaction.description}</p>
                     </div>
                   </button>
                   {isExpanded && (
-                    <div className="mt-3 ml-7 text-xs space-y-1.5 text-muted-foreground">
-                      {interaction.mechanism && (
-                        <p><span className="font-medium text-foreground/60">Mechanism:</span> {interaction.mechanism}</p>
-                      )}
-                      {interaction.recommendation && (
-                        <p><span className="font-medium text-foreground/60">Clinical Note:</span> {interaction.recommendation}</p>
-                      )}
+                    <div className="mt-2 ml-6 text-xs space-y-1 text-muted-foreground">
+                      {interaction.mechanism && <p><strong>Mechanism:</strong> {interaction.mechanism}</p>}
+                      {interaction.recommendation && <p><strong>Note:</strong> {interaction.recommendation}</p>}
                     </div>
                   )}
                 </div>
@@ -110,16 +62,12 @@ export function DrugInteractionAlerts({ interactions, prescriptionReview }: Drug
           </div>
         </div>
       )}
-
       {prescriptionReview && (
-        <div className="glass-card rounded-2xl p-5">
-          <div className="flex items-center gap-2.5 mb-3">
-            <div className="h-8 w-8 rounded-lg bg-violet-500/15 flex items-center justify-center">
-              <Pill className="h-4 w-4 text-violet-400" />
-            </div>
-            <h3 className="text-sm font-semibold">Prescription Context Review</h3>
-          </div>
-          <p className="text-sm text-foreground/75 whitespace-pre-wrap leading-relaxed">{prescriptionReview}</p>
+        <div className="rounded-xl border border-border bg-card p-4 warm-card-hover">
+          <h3 className="text-sm font-medium flex items-center gap-2 mb-2">
+            <Pill className="h-4 w-4 text-primary" /> Prescription context
+          </h3>
+          <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">{prescriptionReview}</p>
         </div>
       )}
     </div>
