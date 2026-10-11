@@ -90,26 +90,39 @@ Current app context:
 ${context}
 
 Available actions are limited to reading the current/saved case data and opening relevant panels. If asked to analyze a scan, be transparent that no validated radiology inference model is connected yet; you may describe the visible image cautiously, but must not present that as a clinical report.`;
-  const endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + encodeURIComponent(apiKey);
+  const modelCandidates = ['gemini-3.8-flash', 'gemini-3.6-flash'];
 
   for (let turn = 0; turn < 5; turn++) {
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: systemInstruction }] },
-        contents: contents.length ? contents : [{ role: 'user', parts: [{ text: 'Introduce yourself briefly.' }] }],
-        tools: [{ functionDeclarations }],
-        generationConfig: { temperature: 0.65, maxOutputTokens: 1200 },
-      }),
-    });
-    const payload = await response.json();
-    if (!response.ok) {
+    let response: Response | null = null;
+    let payload: any = null;
+    let lastModelError = '';
+    for (const model of modelCandidates) {
+      const endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + encodeURIComponent(apiKey);
+      response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: systemInstruction }] },
+          contents: contents.length ? contents : [{ role: 'user', parts: [{ text: 'Introduce yourself briefly.' }] }],
+          tools: [{ functionDeclarations }],
+          generationConfig: { temperature: 0.65, maxOutputTokens: 1200 },
+        }),
+      });
+      payload = await response.json();
+      if (response.ok) break;
       const message = payload?.error?.message || 'The AI service rejected the request.';
+      const modelUnavailable = response.status === 404 || /model .*not found|not supported for generatecontent|no longer available/i.test(message);
+      if (modelUnavailable) {
+        lastModelError = model + ': ' + message;
+        continue;
+      }
       if (response.status === 400 || response.status === 403 || response.status === 401) {
         throw new Error('Gemini could not accept this API key or request: ' + message);
       }
       throw new Error('AI request failed (' + response.status + '): ' + message);
+    }
+    if (!response || !response.ok) {
+      throw new Error('The configured Gemini models were unavailable. Tried gemini-3.8-flash and gemini-3.6-flash. ' + lastModelError + ' Check the current model list and API key permissions in Google AI Studio.');
     }
     const candidate = payload?.candidates?.[0]?.content;
     const parts = Array.isArray(candidate?.parts) ? candidate.parts : [];
