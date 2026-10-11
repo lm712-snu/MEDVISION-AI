@@ -433,7 +433,7 @@ export default function MedicalCopilotPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={handleGoHome
+            onClick={handleGoHome}
             aria-label="Return to home workspace"
             className="h-8 text-xs gap-1.5 border-border/60 hover:border-primary/30"
           >
