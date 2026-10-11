@@ -1,6 +1,7 @@
 'use client';
 
-import { ScanLine, MessageSquare, Pill } from 'lucide-react';
+import Image from 'next/image';
+import { ScanLine, MessageSquare, Pill, ArrowUpRight, Sparkles } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Card } from '@/components/ui/card';
 
@@ -26,7 +27,7 @@ const actionCards = [
     action: 'discuss_case' as const,
     icon: MessageSquare,
     title: 'Discuss a clinical case',
-    description: 'Start with a clinical question or describe the patient\'s presentation',
+    description: "Start with a clinical question or describe the patient's presentation",
   },
   {
     action: 'review_meds' as const,
@@ -38,53 +39,89 @@ const actionCards = [
 
 export function WelcomeState({ onAction }: WelcomeStateProps) {
   return (
-    <div className="flex flex-col items-center justify-center h-full px-6 py-10">
+    <div className="flex min-h-full flex-col items-center justify-center px-5 py-8 sm:px-8 sm:py-10">
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
+        initial={{ opacity: 0, y: 18 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, ease: 'easeOut' }}
-        className="text-center max-w-md"
+        className="w-full max-w-xl"
       >
-        <h2 className="text-2xl font-semibold text-foreground mb-2">
-          {getGreeting()}, Doctor.
-        </h2>
-        <p className="text-sm text-muted-foreground leading-relaxed mb-8">
-          I&apos;m here to help you review scans, organize clinical context, and explore possible findings. What would you like to look at today?
-        </p>
+        <div className="mb-6 flex flex-col items-center justify-center gap-3 sm:flex-row sm:items-end sm:gap-5">
+          <div className="relative flex h-40 w-40 shrink-0 items-end justify-center overflow-hidden rounded-[2rem] bg-gradient-to-br from-[#e5f7f1] to-[#d0eee5] sm:h-44 sm:w-44">
+            <Image
+              src="/doctor-avatar.svg"
+              alt="Friendly MedVision AI doctor assistant"
+              width={160}
+              height={180}
+              priority
+              className="h-[180px] w-[160px] object-contain object-bottom"
+            />
+            <span className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-full bg-white text-[#168779] shadow-sm" aria-label="Ready to help">
+              <Sparkles className="h-4 w-4" />
+            </span>
+          </div>
+          <div className="relative mb-1 max-w-xs rounded-2xl rounded-bl-md border border-[#dcefe8] bg-white px-5 py-4 shadow-sm">
+            <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-primary/70">Your clinical copilot</span>
+            <p className="text-base font-semibold leading-snug text-foreground">“Hello, Doctor!”</p>
+            <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+              I’m MedVision AI. How can I help you today?
+            </p>
+            <span className="absolute -bottom-1.5 left-6 h-3 w-3 rotate-45 border-b border-r border-[#dcefe8] bg-white sm:bottom-5 sm:-left-1.5 sm:border-b-0 sm:border-l" />
+          </div>
+        </div>
+
+        <div className="mb-7 text-center">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-primary/75">Clinical intelligence, alongside you</p>
+          <h2 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+            {getGreeting()}, Doctor.
+          </h2>
+          <p className="mx-auto mt-3 max-w-lg text-sm leading-relaxed text-muted-foreground sm:text-base">
+            Let’s work through it together. Review scans, organize clinical context, or explore a question about a case.
+          </p>
+        </div>
       </motion.div>
 
-      <div className="w-full max-w-md space-y-3">
+      <div className="w-full max-w-xl space-y-3">
         {actionCards.map((card, index) => {
           const Icon = card.icon;
           return (
             <motion.div
               key={card.action}
-              initial={{ opacity: 0, y: 15 }}
+              initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 0.15 + index * 0.1, ease: 'easeOut' }}
+              transition={{ duration: 0.35, delay: 0.12 + index * 0.08, ease: 'easeOut' }}
             >
               <Card
-                className="p-4 cursor-pointer warm-card-hover border-border/50 bg-white hover:bg-white/90 group"
+                role="button"
+                tabIndex={0}
                 onClick={() => onAction(card.action)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    onAction(card.action);
+                  }
+                }}
+                className="warm-card-hover group cursor-pointer border-border/60 bg-white p-4 transition-all hover:-translate-y-0.5 hover:border-primary/25 hover:shadow-md"
               >
                 <div className="flex items-center gap-4">
-                  <div className="flex-shrink-0 h-10 w-10 rounded-xl bg-primary/8 flex items-center justify-center group-hover:bg-primary/12 transition-colors">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#e8f6f1] transition-colors group-hover:bg-[#d8eee7]">
                     <Icon className="h-5 w-5 text-primary" />
                   </div>
-                  <div className="min-w-0">
-                    <h3 className="text-sm font-medium text-foreground group-hover:text-primary transition-colors">
-                      {card.title}
-                    </h3>
-                    <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-                      {card.description}
-                    </p>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-sm font-semibold text-foreground transition-colors group-hover:text-primary">{card.title}</h3>
+                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{card.description}</p>
                   </div>
+                  <ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground/60 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-primary" />
                 </div>
               </Card>
             </motion.div>
           );
         })}
       </div>
+      <p className="mt-5 flex items-center gap-2 text-center text-[11px] text-muted-foreground/80">
+        <Sparkles className="h-3.5 w-3.5 text-primary/70" />
+        Clinical decision support only — use your professional judgment.
+      </p>
     </div>
   );
 }
