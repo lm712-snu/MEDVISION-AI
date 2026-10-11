@@ -345,23 +345,30 @@ export default function MedicalCopilotPage() {
     if (!currentCase) return;
     const freshCase = useMedicalStore.getState().currentCase;
     if (!freshCase?.images?.length) {
-      toast.info('Upload a scan image before requesting a visual review.');
+      toast.info('Upload a scan image before running the demo analysis.');
       setSidePanelView('case_overview');
       return;
     }
 
+    // Restore the original built-in demo workflow; this does not call Gemini.
     setIsAnalyzing(true);
     setSidePanelView('case_overview');
-    addMessage({
-      role: 'user',
-      content: 'Please review the scan image(s) attached to my active case and explain what can and cannot be cautiously observed. Use the case notes and our conversation for context. Separate visible observations from possibilities, do not invent findings or confidence scores, do not give a definitive diagnosis or treatment, and clearly state that this is not a validated radiology report. If the image quality or modality is insufficient, say so.',
-    });
     try {
-      await runAiReply();
+      const result = runAnalysis(freshCase.id);
+      setAnalysisData(result.analysis);
+      setReports(result.reports);
+      addMessage({
+        role: 'assistant',
+        content: 'The built-in demo analysis has finished. Its example findings are displayed in Case Overview. These are synthetic placeholders, not findings derived from the uploaded image, and must not be used for clinical decisions. A qualified radiologist must interpret the actual scan.',
+      });
+      toast.success('Demo analysis complete. See Case Overview.');
+    } catch (error) {
+      toast.error('Could not run the demo analysis.');
+      setError(error instanceof Error ? error.message : 'Demo analysis failed');
     } finally {
       setIsAnalyzing(false);
     }
-  }, [currentCase, addMessage, setIsAnalyzing, setSidePanelView, runAiReply]);
+  }, [currentCase, runAnalysis, setAnalysisData, setReports, addMessage, setIsAnalyzing, setSidePanelView, setError]);
 
   const handleGoHome = useCallback(() => {
     resetAll();
