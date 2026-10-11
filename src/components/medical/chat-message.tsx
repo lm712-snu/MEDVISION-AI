@@ -83,14 +83,11 @@ export function ChatMessageBubble({ message }: ChatMessageBubbleProps) {
         <div className="chat-bubble-user px-4 py-3">
           <p className="whitespace-pre-wrap text-sm leading-relaxed">{message.content}</p>
           {message.attachments && message.attachments.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-2">
+            <div className="mt-2 flex flex-wrap gap-2">
               {message.attachments.map((att, i) => (
-                <div key={i} className="overflow-hidden rounded-lg border border-white/20 bg-black/5">
-                  {att.type === 'image' && att.url ? (
-                    <img src={att.url} alt={att.name} className="max-h-44 max-w-[220px] object-contain" />
-                  ) : null}
-                  <span className="block max-w-[220px] truncate px-2 py-1 text-[11px]">{att.name}</span>
-                </div>
+                <span key={i} className="inline-flex items-center gap-1 rounded-md bg-white/20 px-2 py-1 text-xs">
+                  {att.name}
+                </span>
               ))}
             </div>
           )}
