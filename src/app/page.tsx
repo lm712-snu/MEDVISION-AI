@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useEffect, useState } from 'react';
 import {
-  Brain, Plus, ShieldCheck, PanelRight, House,
+  Brain, Plus, ShieldCheck, PanelRight, House, Sparkles,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -25,6 +25,7 @@ import { ChatInput } from '@/components/medical/chat-input';
 import { WelcomeState } from '@/components/medical/welcome-state';
 import { InlineCaseForm } from '@/components/medical/inline-case-form';
 import { SidePanel } from '@/components/medical/side-panel';
+import { sendGeminiConversation, type GeminiToolCall } from '@/lib/gemini-chat';
 
 export default function MedicalCopilotPage() {
   const store = useMedicalStore();
@@ -51,6 +52,11 @@ export default function MedicalCopilotPage() {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [caseFormVisible, setCaseFormVisible] = useState(false);
+  const [aiConnected, setAiConnected] = useState(false);
+
+  useEffect(() => {
+    setAiConnected(Boolean(window.sessionStorage.getItem('medvision-gemini-api-key')));
+  }, []);
 
   // Auto-scroll chat
   useEffect(() => {
@@ -128,69 +134,142 @@ export default function MedicalCopilotPage() {
     [store.draftCase, setCurrentCase, setSidePanelView, addMessage]
   );
 
+  const handleConnectAI = useCallback(() => {
+    if (aiConnected) {
+      if (window.confirm('Disconnect Gemini AI for this browser session?')) {
+        window.sessionStorage.removeItem('medvision-gemini-api-key');
+        setAiConnected(false);
+        toast.info('AI disconnected.');
+      }
+      return;
+    }
+    const key = window.prompt('Enter your Google Gemini API key. It is kept only in this browser tab session and sent directly to Google. Do not use a key with sensitive production access.');
+    if (!key?.trim()) return;
+    window.sessionStorage.setItem('medvision-gemini-api-key', key.trim());
+    setAiConnected(true);
+    toast.success('Gemini AI connected for this session.');
+  }, [aiConnected]);
+
+  const executeLocalTool = useCallback(async (call: GeminiToolCall) => {
+    const state = useMedicalStore.getState();
+    const activeCase = state.currentCase;
+    if (call.name === 'get_current_case') {
+      if (!activeCase) return { ok: true, message: 'No active case is selected.', currentCase: null };
+      return {
+        ok: true,
+        currentCase: {
+          patientId: activeCase.patientId,
+          scanType: activeCase.scanType,
+          bodyRegion: activeCase.bodyRegion,
+          notes: activeCase.notes,
+          status: activeCase.status,
+          uploadedImages: activeCase.images.map(image => ({ fileName: image.fileName, mimeType: image.mimeType, fileSize: image.fileSize })),
+          medications: activeCase.prescriptions.map(med => ({ name: med.medicationName, dosage: med.dosage, frequency: med.frequency, notes: med.notes })),
+          storedAnalysis: activeCase.analysis ? {
+            label: 'Stored application analysis; may be demo/mock output, not a validated radiology model result',
+            findings: activeCase.analysis.findings,
+            prescriptionReview: activeCase.analysis.prescriptionReview,
+            drugInteractions: activeCase.analysis.drugInteractions,
+          } : null,
+        },
+      };
+    }
+    if (call.name === 'list_saved_cases') {
+      return {
+        ok: true,
+        cases: state.cases.map(item => ({
+          patientId: item.patientId,
+          scanType: item.scanType,
+          bodyRegion: item.bodyRegion,
+          status: item.status,
+          updatedAt: item.updatedAt,
+        })),
+      };
+    }
+    if (call.name === 'show_case_findings') {
+      if (!activeCase) return { ok: false, message: 'There is no active case. Ask the clinician to open or create a case first.' };
+      state.setSidePanelView('findings');
+      return { ok: true, action: 'Opened findings panel.', storedAnalysisAvailable: Boolean(activeCase.analysis), note: 'The existing analysis may be mock/demo output and is not a validated AI scan interpretation.' };
+    }
+    if (call.name === 'show_medications') {
+      if (!activeCase) return { ok: false, message: 'There is no active case.' };
+      state.setSidePanelView('medications');
+      return { ok: true, action: 'Opened medication panel.', medications: activeCase.prescriptions.map(med => ({ name: med.medicationName, dosage: med.dosage, frequency: med.frequency })) };
+    }
+    if (call.name === 'show_case_overview') {
+      if (!activeCase) return { ok: false, message: 'There is no active case.' };
+      state.setSidePanelView('case_overview');
+      return { ok: true, action: 'Opened case overview.', patientId: activeCase.patientId, scanType: activeCase.scanType, bodyRegion: activeCase.bodyRegion, uploadedImageCount: activeCase.images.length };
+    }
+    return { ok: false, message: 'Unsupported tool.' };
+  }, []);
+
+  const runAiReply = useCallback(async () => {
+    setTyping(true);
+    try {
+      const apiKey = window.sessionStorage.getItem('medvision-gemini-api-key');
+      if (!apiKey) {
+        addMessage({
+          role: 'assistant',
+          content: 'I’m ready to help with the conversation and any attached images, but the AI model is not connected yet. Select “Connect AI” in the top bar and enter a Google Gemini API key. Until it is connected, I won’t pretend that a scripted reply is an AI analysis.',
+        });
+        return;
+      }
+      const state = useMedicalStore.getState();
+      const activeCase = state.currentCase;
+      const context = activeCase ? JSON.stringify({
+        activeCase: {
+          patientId: activeCase.patientId,
+          scanType: activeCase.scanType,
+          bodyRegion: activeCase.bodyRegion,
+          notes: activeCase.notes,
+          status: activeCase.status,
+          images: activeCase.images.map(image => ({ fileName: image.fileName, mimeType: image.mimeType, fileSize: image.fileSize })),
+          medications: activeCase.prescriptions.map(med => ({ name: med.medicationName, dosage: med.dosage, frequency: med.frequency, notes: med.notes })),
+          storedAnalysis: activeCase.analysis ? { label: 'Potentially mock/demo output; not validated radiology inference', findings: activeCase.analysis.findings, drugInteractions: activeCase.analysis.drugInteractions } : null,
+        },
+        savedCaseCount: state.cases.length,
+      }) : JSON.stringify({ activeCase: null, savedCaseCount: state.cases.length });
+      const history = state.messages.map(message => ({
+        role: message.role,
+        content: message.content,
+        attachments: message.attachments,
+      }));
+      const result = await sendGeminiConversation({
+        apiKey,
+        messages: history,
+        context,
+        executeTool: executeLocalTool,
+      });
+      addMessage({
+        role: 'assistant',
+        content: result.text + (result.toolCalls.length ? '\n\n' + 'Used workspace tools: ' + [...new Set(result.toolCalls.map(tool => tool.name.replaceAll('_', ' ')))].join(', ') + '.' : ''),
+      });
+      setError(null);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Unknown connection error.';
+      setError(detail);
+      addMessage({
+        role: 'assistant',
+        content: 'I couldn’t get a response from Gemini. ' + detail + '\n\nPlease check your connection and API key under “Connect AI”, then try again. Your message remains in this conversation.',
+      });
+      toast.error('AI response failed. Check the connection details.');
+    } finally {
+      setTyping(false);
+    }
+  }, [addMessage, setTyping, setError, executeLocalTool]);
+
   const handleSendMessage = useCallback(
-    (content: string) => {
+    async (content: string) => {
       addMessage({ role: 'user', content });
-
-      setTyping(true);
-      setTimeout(() => {
-        setTyping(false);
-
-        if (!currentCase) {
-          const scanKeywords = /scan|mri|ct|x-ray|xray|image|upload|radiol/i;
-          if (scanKeywords.test(content)) {
-            addMessage({
-              role: 'assistant',
-              content: 'I\'d be happy to help review that scan. Let me set up a case first — could you share the patient\'s identifier and the scan region?',
-            });
-            setCaseFormVisible(true);
-          } else {
-            addMessage({
-              role: 'assistant',
-              content: 'I understand. To give you the best support, let me set up a case first. Could you share the patient\'s identifier and the relevant scan region?',
-            });
-            setCaseFormVisible(true);
-          }
-        } else {
-          const analysisKeywords = /analy|result|finding|report/i;
-          const uploadKeywords = /upload|attach|scan|image/i;
-          const medKeywords = /med|drug|prescription|interact|dosage/i;
-
-          if (analysisKeywords.test(content) && currentCase.status === 'completed') {
-            addMessage({
-              role: 'assistant',
-              content: 'The analysis is complete. You can view the detailed findings in the side panel. Would you like me to walk you through any specific finding?',
-            });
-          } else if (uploadKeywords.test(content)) {
-            addMessage({
-              role: 'assistant',
-              content: 'You can attach scan images using the paperclip button in the input bar, or drag and drop files in the side panel\'s upload area.',
-            });
-          } else if (medKeywords.test(content)) {
-            addMessage({
-              role: 'assistant',
-              content: 'I can help with medication review. You can add prescriptions in the side panel, and I\'ll check for interactions and contraindications once the list is saved.',
-            });
-            setSidePanelView('medications');
-          } else {
-            addMessage({
-              role: 'assistant',
-              content: 'Got it. I\'m here to help — feel free to ask follow-up questions, upload additional scans, or request an analysis when you\'re ready.',
-            });
-          }
-        }
-      }, 800 + Math.random() * 1200);
+      await runAiReply();
     },
-    [addMessage, setTyping, currentCase, setSidePanelView]
+    [addMessage, runAiReply]
   );
 
   const handleAttach = useCallback(() => {
-    if (!currentCase) {
-      toast.info('Create a case first to upload images.');
-      return;
-    }
     fileInputRef.current?.click();
-  }, [currentCase]);
+  }, []);
 
   const handleRefreshCase = useCallback(async () => {
     if (!currentCase) return;
@@ -203,39 +282,43 @@ export default function MedicalCopilotPage() {
 
   const handleFileUpload = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (!currentCase || !e.target.files || e.target.files.length === 0) return;
-
+      if (!e.target.files || e.target.files.length === 0) return;
       const files = Array.from(e.target.files);
       const imageData: { fileName: string; mimeType: string; fileSize: number; dataUrl: string }[] = [];
 
       for (const file of files) {
-        const dataUrl = await new Promise<string>((resolve) => {
+        if (!file.type.startsWith('image/')) continue;
+        const dataUrl = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
           reader.onload = () => resolve(reader.result as string);
+          reader.onerror = () => reject(new Error('Could not read ' + file.name));
           reader.readAsDataURL(file);
         });
-        imageData.push({
-          fileName: file.name,
-          mimeType: file.type,
-          fileSize: file.size,
-          dataUrl,
-        });
+        imageData.push({ fileName: file.name, mimeType: file.type, fileSize: file.size, dataUrl });
       }
 
-      addImagesToCase(currentCase.id, imageData);
+      if (imageData.length === 0) {
+        toast.info('Please attach an image file such as PNG or JPEG.');
+        e.target.value = '';
+        return;
+      }
 
-      // Refresh current case reference
-      const refreshed = useMedicalStore.getState().cases.find(c => c.id === currentCase.id);
-      if (refreshed) setCurrentCase(refreshed);
+      const activeCase = useMedicalStore.getState().currentCase;
+      if (activeCase) {
+        addImagesToCase(activeCase.id, imageData);
+        const refreshed = useMedicalStore.getState().cases.find(c => c.id === activeCase.id);
+        if (refreshed) setCurrentCase(refreshed);
+      }
 
       addMessage({
-        role: 'assistant',
-        content: `Received ${files.length} scan image(s). They're now attached to the case. You can review them in the side panel, or go ahead and run the analysis when ready.`,
+        role: 'user',
+        content: `I attached ${imageData.length} image(s): ${imageData.map(image => image.fileName).join(', ')}. Please examine the image content and respond to my question using this visual context. If I have not asked a specific question yet, tell me what you can and cannot safely infer from the image.`,
+        attachments: imageData.map(image => ({ type: 'image' as const, name: image.fileName, url: image.dataUrl })),
       });
-
+      await runAiReply();
       e.target.value = '';
     },
-    [currentCase, addImagesToCase, addMessage, setCurrentCase]
+    [addImagesToCase, setCurrentCase, addMessage, runAiReply]
   );
 
   const handleRunAnalysis = useCallback(async () => {
@@ -317,9 +400,20 @@ export default function MedicalCopilotPage() {
 
         <div className="flex items-center gap-2 sm:gap-3">
           <Button
+            variant={aiConnected ? "secondary" : "outline"}
+            size="sm"
+            onClick={handleConnectAI}
+            aria-label={aiConnected ? "Manage Gemini AI connection" : "Connect Gemini AI"}
+            className="h-8 text-xs gap-1.5 border-border/60 hover:border-primary/30"
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">{aiConnected ? 'AI connected' : 'Connect AI'}</span>
+          </Button>
+
+          <Button
             variant="outline"
             size="sm"
-            onClick={handleGoHome}
+            onClick={handleGoHome
             aria-label="Return to home workspace"
             className="h-8 text-xs gap-1.5 border-border/60 hover:border-primary/30"
           >
